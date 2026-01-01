@@ -1,0 +1,362 @@
+import { useState, useEffect, useRef } from 'react'
+
+function App() {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // "login" or "register"
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [userId, setUserId] = useState("");
+  const [authError, setAuthError] = useState("");
+  
+  // Room state
+  const [roomId, setRoomId] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [content, setContent] = useState("");
+  const [users, setUsers] = useState([]);
+  const ws = useRef(null);
+
+  // --- JOIN LOGIC ---
+  const [serverPort, setServerPort] = useState("8000"); // Default port
+
+  // --- AUTHENTICATION LOGIC ---
+  const handleAuth = async () => {
+    setAuthError("");
+    const endpoint = authMode === "login" ? "/api/login" : "/api/register";
+    
+    try {
+      const response = await fetch(`http://127.0.0.1:${serverPort}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        setAuthError(error.detail || "Authentication failed");
+        return;
+      }
+      
+      const data = await response.json();
+      setUserId(data.user_id);
+      setUsername(data.username);
+      setIsAuthenticated(true);
+    } catch (error) {
+      setAuthError("Connection error. Is the server running?");
+    }
+  };
+
+const joinRoom = () => {
+  if (!roomId) return;
+  
+  // Close existing connection if any
+  if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+    ws.current.close();
+  }
+  
+  // Dynamically use the port from the input field, include userId as query parameter
+  ws.current = new WebSocket(`ws://127.0.0.1:${serverPort}/ws/${roomId}?user_id=${userId}`);
+  
+  ws.current.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      
+      if (message.type === "presence") {
+        // Update the list of active users
+        setUsers(message.users || []);
+      } else if (message.type === "content") {
+        // Update the document content
+        setContent(message.data);
+      }
+    } catch (e) {
+      // If it's plain text (backward compatibility), treat as content
+      setContent(event.data);
+    }
+  };
+  
+  ws.current.onopen = () => {
+    console.log("Connected to room:", roomId);
+  };
+  
+  ws.current.onclose = () => {
+    console.log("Disconnected from room");
+  };
+  
+  ws.current.onerror = (error) => {
+    console.error("WebSocket error:", error);
+  };
+  
+  setJoined(true);
+};
+
+  // --- DEBOUNCE LOGIC ---
+  useEffect(() => {
+    // Don't do anything if we haven't joined or socket isn't ready
+    if (!joined || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+
+    // Set a timer to send the data after 500ms of "silence"
+    const timeoutId = setTimeout(() => {
+      ws.current.send(content);
+      console.log("Data sent to server (Debounced)");
+    }, 500);
+
+    // Cleanup: This "kills" the timer if the user types again before 500ms is up
+    return () => clearTimeout(timeoutId);
+  }, [content, joined]);
+
+  // --- CLEANUP ON UNMOUNT OR REFRESH ---
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.close();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.close();
+      }
+    };
+  }, []);
+
+  const handleTextChange = (e) => {
+    setContent(e.target.value);
+  };
+
+  
+
+  // --- AUTHENTICATION VIEW ---
+  if (!isAuthenticated) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100vh',
+        background: '#282c34',
+        color: 'white'
+      }}>
+        <h1>SyncWrite</h1>
+        <div style={{ 
+          background: '#1e1e1e', 
+          padding: '30px', 
+          borderRadius: '10px',
+          width: '300px'
+        }}>
+          <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+            <button 
+              onClick={() => setAuthMode("login")}
+              style={{
+                padding: '10px 20px',
+                background: authMode === "login" ? '#4a90e2' : '#3a3a3a',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                borderRadius: '5px 0 0 5px'
+              }}
+            >
+              Login
+            </button>
+            <button 
+              onClick={() => setAuthMode("register")}
+              style={{
+                padding: '10px 20px',
+                background: authMode === "register" ? '#4a90e2' : '#3a3a3a',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                borderRadius: '0 5px 5px 0'
+              }}
+            >
+              Register
+            </button>
+          </div>
+          
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+            style={{
+              width: '100%',
+              padding: '10px',
+              marginBottom: '10px',
+              borderRadius: '5px',
+              border: 'none',
+              fontSize: '14px'
+            }}
+          />
+          
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+            style={{
+              width: '100%',
+              padding: '10px',
+              marginBottom: '10px',
+              borderRadius: '5px',
+              border: 'none',
+              fontSize: '14px'
+            }}
+          />
+          
+          <input
+            type="text"
+            placeholder="Server Port (8000)"
+            value={serverPort}
+            onChange={(e) => setServerPort(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              marginBottom: '15px',
+              borderRadius: '5px',
+              border: 'none',
+              fontSize: '14px'
+            }}
+          />
+          
+          {authError && (
+            <div style={{ 
+              color: '#ff6b6b', 
+              marginBottom: '10px', 
+              fontSize: '14px',
+              textAlign: 'center'
+            }}>
+              {authError}
+            </div>
+          )}
+          
+          <button
+            onClick={handleAuth}
+            style={{
+              width: '100%',
+              padding: '12px',
+              background: '#4a90e2',
+              border: 'none',
+              color: 'white',
+              fontSize: '16px',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            {authMode === "login" ? "Login" : "Create Account"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Lobby View (Simplified for brevity)
+  if (!joined) {
+    return (
+  <div style={{ textAlign: 'center', marginTop: '50px', background: '#282c34', height: '100vh', color: 'white', paddingTop: '50px' }}>
+    <h1>Welcome, {username}!</h1>
+    <div style={{ 
+      background: '#1e1e1e', 
+      padding: '30px', 
+      borderRadius: '10px',
+      width: '400px',
+      margin: '0 auto'
+    }}>
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', marginBottom: '5px' }}>Room Name: </label>
+        <input 
+          value={roomId} 
+          onChange={(e) => setRoomId(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && joinRoom()}
+          placeholder="Enter room name" 
+          style={{
+            width: '100%',
+            padding: '10px',
+            borderRadius: '5px',
+            border: 'none',
+            fontSize: '14px'
+          }}
+        />
+      </div>
+      <button 
+        onClick={joinRoom}
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: '#4a90e2',
+          border: 'none',
+          color: 'white',
+          fontSize: '16px',
+          borderRadius: '5px',
+          cursor: 'pointer'
+        }}
+      >
+        Join Room
+      </button>
+      <button 
+        onClick={() => setIsAuthenticated(false)}
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: '#6c757d',
+          border: 'none',
+          color: 'white',
+          fontSize: '14px',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          marginTop: '10px'
+        }}
+      >
+        Logout
+      </button>
+    </div>
+  </div>
+);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#282c34', color: 'white', height: '100vh' }}>
+      <h2>Room: {roomId}</h2>
+      
+      {/* User Presence Display */}
+      <div style={{ 
+        width: '80%', 
+        padding: '10px', 
+        background: '#1e1e1e', 
+        borderRadius: '5px', 
+        marginBottom: '10px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        flexWrap: 'wrap'
+      }}>
+        <span style={{ fontWeight: 'bold' }}>Active Users ({users.length}):</span>
+        {users.length > 0 ? users.map((user, idx) => (
+          <span key={idx} style={{ 
+            background: '#4a4a4a', 
+            padding: '4px 8px', 
+            borderRadius: '3px',
+            fontSize: '12px'
+          }}>
+            {user.username || user}
+          </span>
+        )) : (
+          <span style={{ color: '#888', fontSize: '12px' }}>No other users</span>
+        )}
+      </div>
+
+      <textarea
+        value={content}
+        onChange={handleTextChange}
+        style={{ width: '80%', height: '60%', fontSize: '18px', padding: '15px' }}
+      />
+      <p style={{ color: '#888' }}>Changes save 500ms after you stop typing.</p>
+    </div>
+  );
+}
+
+export default App;
