@@ -1,5 +1,6 @@
-import { Button, Avatar } from './UI'
-import { useState } from 'react'
+import { Button, Avatar } from './UI';
+import { useState } from 'react';
+import { RichTextEditor } from './Editor';
 
 export function EditorView({ username, roomName, content, setContent, users, onLeave, serverPort }) {
   const [showUserPanel, setShowUserPanel] = useState(false);
@@ -13,8 +14,16 @@ export function EditorView({ username, roomName, content, setContent, users, onL
     return name.substring(0, 2).toUpperCase();
   };
 
-  const characterCount = content.length;
-  const wordCount = content.trim().split(/\s+/).filter(word => word.length > 0).length;
+  // Extract text from HTML for character/word count
+  const getTextFromHTML = (html) => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return temp.textContent || temp.innerText || '';
+  };
+
+  const plainText = getTextFromHTML(content);
+  const characterCount = plainText.length;
+  const wordCount = plainText.trim().split(/\s+/).filter(word => word.length > 0).length;
 
   return (
     <div className="flex h-screen flex-col bg-white relative">
@@ -129,7 +138,7 @@ export function EditorView({ username, roomName, content, setContent, users, onL
         </div>
       </header>
 
-      {/* Toolbar */}
+      {/* Toolbar - Now part of RichTextEditor */}
       <div className="flex h-12 items-center gap-1 border-b px-4 bg-gray-50/50">
         <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
           File
@@ -143,34 +152,21 @@ export function EditorView({ username, roomName, content, setContent, users, onL
         <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
           Insert
         </div>
-        <div className="h-6 w-px bg-gray-200 mx-2" />
-        <select className="px-3 py-1 bg-white border border-gray-300 rounded shadow-sm text-xs font-medium cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option>Arial</option>
-          <option>Times New Roman</option>
-          <option>Courier New</option>
-          <option>Georgia</option>
-        </select>
-        <select className="px-2 py-1 bg-white border border-gray-300 rounded shadow-sm text-xs font-medium cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 ml-1">
-          <option>12</option>
-          <option>10</option>
-          <option>14</option>
-          <option>16</option>
-          <option>18</option>
-          <option>24</option>
-        </select>
+        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
+          Format
+        </div>
+        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
+          Tools
+        </div>
       </div>
 
-      {/* Content Area */}
-      <main className="flex-1 overflow-auto bg-[#F8F9FA] p-8">
-        <div className="mx-auto min-h-[1056px] w-full max-w-[816px] bg-white p-[96px] shadow-[0_2px_4px_rgba(0,0,0,0.1)] ring-1 ring-black/5 rounded-sm">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full h-full min-h-[864px] text-base leading-7 focus:outline-none resize-none"
-            placeholder="Start typing..."
-            style={{ fontFamily: 'Arial, sans-serif' }}
-          />
-        </div>
+      {/* Content Area with Rich Text Editor */}
+      <main className="flex-1 overflow-hidden">
+        <RichTextEditor 
+          content={content}
+          onChange={setContent}
+          placeholder="Start typing..."
+        />
       </main>
 
       {/* Footer */}
