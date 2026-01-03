@@ -4,6 +4,7 @@ import { Button, Input } from './UI'
 export function Auth({ onAuthComplete, serverPort, setServerPort }) {
   const [authMode, setAuthMode] = useState("login");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
@@ -12,10 +13,14 @@ export function Auth({ onAuthComplete, serverPort, setServerPort }) {
     const endpoint = authMode === "login" ? "/api/login" : "/api/register";
     
     try {
+      const requestBody = authMode === "login" 
+        ? { email, password }
+        : { username, email, password };
+
       const response = await fetch(`http://127.0.0.1:${serverPort}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(requestBody)
       });
       
       if (!response.ok) {
@@ -25,9 +30,18 @@ export function Auth({ onAuthComplete, serverPort, setServerPort }) {
       }
       
       const data = await response.json();
+      // Store JWT token and user info
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('userId', data.user_id);
+      localStorage.setItem('username', data.username);
+      localStorage.setItem('email', data.email);
+      localStorage.setItem('isAdmin', data.is_admin ? 'true' : 'false');
+      
       onAuthComplete({
         userId: data.user_id,
-        username: data.username
+        username: data.username,
+        email: data.email,
+        token: data.token
       });
     } catch (error) {
       setAuthError("Connection error. Is the server running?");
@@ -78,17 +92,37 @@ export function Auth({ onAuthComplete, serverPort, setServerPort }) {
             
             {/* Form */}
             <div className="space-y-4 pb-8">
+              {authMode === "register" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Username</label>
+                  <div className="relative">
+                    <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <Input
+                      placeholder="johndoe"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+              
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Username</label>
+                <label className="text-sm font-medium text-gray-700">Email</label>
                 <div className="relative">
                   <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   <Input
-                    placeholder="johndoe"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    type="email"
+                    placeholder="john@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10"
+                    required
                   />
                 </div>
               </div>

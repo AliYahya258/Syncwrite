@@ -1,14 +1,13 @@
 import { ToolbarButton, ToolbarSeparator, ToolbarDropdown } from './ToolbarButton';
 import { useEffect, useState } from 'react';
 
-export function FormattingToolbar({ editor }) {
+export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readOnly = false }) {
   if (!editor) {
     return null;
   }
 
   // Local state to force re-render when the editor state changes
-  const [tick, setTick] = useState(0);
-  const [font, setFont] = useState('Arial');
+  const [, setTick] = useState(0);
   const exec = (fn) => {
     try {
       fn();
@@ -17,6 +16,7 @@ export function FormattingToolbar({ editor }) {
       setTick(t => t + 1);
     }
   };
+  
   useEffect(() => {
     const handle = () => setTick(t => t + 1);
     editor.on('update', handle);
@@ -34,19 +34,6 @@ export function FormattingToolbar({ editor }) {
     { value: 'Georgia', label: 'Georgia' },
     { value: 'Verdana', label: 'Verdana' },
   ];
-
-  const handleFontChange = (e) => {
-    const value = e.target.value;
-    setFont(value);
-    // Apply font using the TextStyle mark (requires TextStyle extension)
-    try {
-      editor.chain().focus().setMark('textStyle', { style: `font-family: ${value};` }).run();
-    } catch (e) {
-      // fallback: do nothing if the extension/command isn't available
-    }
-    // trigger re-render
-    setTick(t => t + 1);
-  };
 
   const headingOptions = [
     { value: 'paragraph', label: 'Normal text' },
@@ -73,6 +60,23 @@ export function FormattingToolbar({ editor }) {
 
   return (
     <div className="flex items-center gap-1 px-4 py-2 border-b bg-white overflow-x-auto">
+      {/* Invite Button - Only for owners and editors */}
+      {(userRole === 'owner' || userRole === 'editor') && onInvite && (
+        <>
+          <ToolbarButton
+            onClick={onInvite}
+            title="Invite User to Room"
+            className="bg-blue-50 hover:bg-blue-100 text-blue-600"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+            <span className="ml-1 text-sm font-medium">Invite</span>
+          </ToolbarButton>
+          <ToolbarSeparator />
+        </>
+      )}
+      
       {/* Undo/Redo */}
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().undo().run())}
@@ -92,16 +96,6 @@ export function FormattingToolbar({ editor }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
         </svg>
       </ToolbarButton>
-
-      <ToolbarSeparator />
-
-      {/* Font Selector */}
-      <ToolbarDropdown
-        value={font}
-        onChange={handleFontChange}
-        options={fontOptions}
-        className="w-36"
-      />
 
       <ToolbarSeparator />
 
@@ -159,7 +153,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().setTextAlign('left').run())}
         isActive={editor.isActive({ textAlign: 'left' })}
-        title="Align Left"
+        title="Align Left (Ctrl+Shift+L)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"/>
@@ -168,7 +162,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().setTextAlign('center').run())}
         isActive={editor.isActive({ textAlign: 'center' })}
-        title="Align Center"
+        title="Align Center (Ctrl+Shift+E)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/>
@@ -177,7 +171,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().setTextAlign('right').run())}
         isActive={editor.isActive({ textAlign: 'right' })}
-        title="Align Right"
+        title="Align Right (Ctrl+Shift+R)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"/>
@@ -186,7 +180,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().setTextAlign('justify').run())}
         isActive={editor.isActive({ textAlign: 'justify' })}
-        title="Justify"
+        title="Justify (Ctrl+Shift+J)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"/>
@@ -199,7 +193,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().toggleBulletList().run())}
         isActive={editor.isActive('bulletList')}
-        title="Bullet List"
+        title="Bullet List (Ctrl+Shift+8)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
@@ -208,7 +202,7 @@ export function FormattingToolbar({ editor }) {
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().toggleOrderedList().run())}
         isActive={editor.isActive('orderedList')}
-        title="Numbered List"
+        title="Numbered List (Ctrl+Shift+7)"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/>

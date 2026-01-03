@@ -131,4 +131,58 @@
   .ProseMirror-focused {
     outline: none;
   }
+
+  /* Text alignment */
+  .ProseMirror [style*="text-align: left"] {
+    text-align: left;
+  }
+
+  .ProseMirror [style*="text-align: center"] {
+    text-align: center;
+  }
+
+  .ProseMirror [style*="text-align: right"] {
+    text-align: right;
+  }
+
+  .ProseMirror [style*="text-align: justify"] {
+    text-align: justify;
+  }
+
+  /* Page background styling */
+  .ProseMirror {
+    background: transparent;
+  }
+
+  /* Print styles for page breaks */
+  @media print {
+    .ProseMirror div[data-type="page-break"] {
+      page-break-after: always;
+      break-after: page;
+      border: none;
+      background: none;
+      height: 0;
+      margin: 0;
+      padding: 0;
+    }
+
+    .ProseMirror div[data-type="page-break"]::before {
+      display: none;
+    }
+  }
+
+  /* Smooth zoom transition */
+  .zoom-transition {
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* Line numbers smooth scrolling */
+  .line-numbers-container {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .line-numbers-container::-webkit-scrollbar {
+    display: none;
+  }
 }
