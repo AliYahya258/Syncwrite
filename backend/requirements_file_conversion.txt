@@ -1,0 +1,5 @@
+# Additional packages for file upload/download functionality
+python-docx>=1.1.0
+mammoth>=1.6.0
+weasyprint>=60.0
+beautifulsoup4>=4.12.0

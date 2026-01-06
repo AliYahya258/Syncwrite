@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from .models import (
     RegisterRequest, LoginRequest, LoginResponse,
@@ -11,10 +12,12 @@ from .db import (
     create_invitation, get_user_invitations, accept_invitation, decline_invitation,
     grant_room_access, revoke_room_access,
     get_all_users, get_all_rooms, delete_user_admin, delete_room_admin,
-    make_user_admin, check_is_admin
+    make_user_admin, check_is_admin, update_document_content
 )
 from .jwt_utils import create_access_token, verify_token
 from .redis_client import r
+import io
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -101,6 +104,22 @@ async def list_rooms(current_user: dict = Depends(get_current_user)):
     """List all rooms user has access to"""
     rooms = get_user_rooms(current_user["user_id"])
     return {"rooms": rooms}
+
+
+@router.delete("/api/rooms/{room_id:path}")
+async def delete_own_room(
+    room_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a room (owner only)"""
+    # Check if current user is the owner
+    role = check_room_access(room_id, current_user["user_id"])
+    if role != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can delete a room")
+    
+    # Use the admin delete function since it does the same thing
+    delete_room_admin(room_id)
+    return {"message": "Room deleted successfully"}
 
 
 @router.get("/api/rooms/{room_id:path}/users")
@@ -289,4 +308,147 @@ async def admin_make_admin(
     """Promote a user to admin (admin only)"""
     make_user_admin(user_id)
     return {"message": "User promoted to admin successfully"}
+
+
+# ============ File Upload/Download Endpoints ============
+
+class DownloadRequest(BaseModel):
+    room_id: str
+    content: str
+
+
+@router.post("/api/upload-docx")
+async def upload_docx(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a DOCX file and convert to HTML"""
+    try:
+        from docx import Document
+        import mammoth
+        
+        # Read the uploaded file
+        contents = await file.read()
+        
+        # Convert DOCX to HTML using mammoth
+        result = mammoth.convert_to_html(io.BytesIO(contents))
+        html_content = result.value
+        
+        return {"html_content": html_content, "messages": result.messages}
+    except ImportError:
+        raise HTTPException(
+            status_code=500, 
+            detail="Document conversion libraries not installed. Run: pip install python-docx mammoth"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@router.post("/api/download-pdf")
+async def download_pdf(
+    req: DownloadRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download document as PDF"""
+    try:
+        from weasyprint import HTML
+        
+        # Check if user has access to the room
+        role = check_room_access(req.room_id, current_user["user_id"])
+        if not role:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Create PDF from HTML content
+        html_with_styles = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    padding: 2cm;
+                    max-width: 21cm;
+                    margin: 0 auto;
+                }}
+                h1, h2, h3 {{ margin-top: 1em; margin-bottom: 0.5em; }}
+                p {{ margin: 0.5em 0; }}
+            </style>
+        </head>
+        <body>
+            {req.content}
+        </body>
+        </html>
+        """
+        
+        pdf_bytes = HTML(string=html_with_styles).write_pdf()
+        
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=document.pdf"}
+        )
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF generation library not installed. Run: pip install weasyprint"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+
+
+@router.post("/api/download-docx")
+async def download_docx(
+    req: DownloadRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download document as DOCX"""
+    try:
+        from docx import Document
+        from bs4 import BeautifulSoup
+        
+        # Check if user has access to the room
+        role = check_room_access(req.room_id, current_user["user_id"])
+        if not role:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Create a new Document
+        doc = Document()
+        
+        # Parse HTML content
+        soup = BeautifulSoup(req.content, 'html.parser')
+        
+        # Convert HTML to DOCX paragraphs
+        for element in soup.find_all(['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li']):
+            text = element.get_text()
+            if element.name == 'h1':
+                doc.add_heading(text, level=1)
+            elif element.name == 'h2':
+                doc.add_heading(text, level=2)
+            elif element.name == 'h3':
+                doc.add_heading(text, level=3)
+            elif element.name == 'p':
+                doc.add_paragraph(text)
+            elif element.name in ['li']:
+                doc.add_paragraph(text, style='List Bullet')
+        
+        # Save to bytes
+        docx_bytes = io.BytesIO()
+        doc.save(docx_bytes)
+        docx_bytes.seek(0)
+        
+        return StreamingResponse(
+            docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename=document.docx"}
+        )
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="Document libraries not installed. Run: pip install python-docx beautifulsoup4"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating DOCX: {str(e)}")
+
 

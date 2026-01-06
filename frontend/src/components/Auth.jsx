@@ -10,6 +10,26 @@ export function Auth({ onAuthComplete, serverPort, setServerPort }) {
 
   const handleAuth = async () => {
     setAuthError("");
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setAuthError("Please enter a valid email address (e.g., user@example.com)");
+      return;
+    }
+    
+    // Validate password
+    if (!password || password.length < 3) {
+      setAuthError("Password must be at least 3 characters long");
+      return;
+    }
+    
+    // Validate username for registration
+    if (authMode === "register" && (!username || username.length < 2)) {
+      setAuthError("Username must be at least 2 characters long");
+      return;
+    }
+    
     const endpoint = authMode === "login" ? "/api/login" : "/api/register";
     
     try {

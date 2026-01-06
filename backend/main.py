@@ -1,10 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from app.ai.ai_routes import router as ai_router  # ADD THIS
 
 from app import db
 from app.listener import redis_listener
 from app.auth import router as auth_router
 from app.websocket import router as ws_router
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
@@ -41,3 +46,4 @@ async def health():
 # Include routers
 app.include_router(auth_router)
 app.include_router(ws_router)
+app.include_router(ai_router)

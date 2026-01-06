@@ -1,10 +1,45 @@
 import { ToolbarButton, ToolbarSeparator, ToolbarDropdown } from './ToolbarButton';
-import { useEffect, useState } from 'react';
+import { AIEnhanceMenu } from './AI/AIEnhanceMenu';
+import { useEffect, useState, useRef } from 'react';
 
-export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readOnly = false }) {
+export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readOnly = false, token, showAIMenu: controlledShowAIMenu, onCloseAIMenu }) {
+  const [showAIMenu, setShowAIMenu] = useState(false);
+  const fileInputRef = useRef(null);
+  
   if (!editor) {
     return null;
   }
+  
+  // Use controlled prop if provided, otherwise use local state
+  const isAIMenuOpen = controlledShowAIMenu !== undefined ? controlledShowAIMenu : showAIMenu;
+  
+  console.log('📋 FormattingToolbar render:');
+  console.log('  - controlledShowAIMenu:', controlledShowAIMenu);
+  console.log('  - local showAIMenu:', showAIMenu);
+  console.log('  - isAIMenuOpen:', isAIMenuOpen);
+  console.log('  - onCloseAIMenu defined:', !!onCloseAIMenu);
+  
+  const handleAIMenuToggle = () => {
+    console.log('🔘 AI menu toggle clicked');
+    console.log('  - Current isAIMenuOpen:', isAIMenuOpen);
+    // The menu is already open from the external button, just close it
+    // Don't toggle here since the button in EditorView already toggled the state
+    if (onCloseAIMenu) {
+      console.log('  - Calling onCloseAIMenu');
+      onCloseAIMenu();
+    } else {
+      console.log('  - Toggling local state');
+      setShowAIMenu(!showAIMenu);
+    }
+  };
+  const handleAIMenuClose = () => {
+    console.log('❌ AI menu close called');
+    if (onCloseAIMenu) {
+      onCloseAIMenu();
+    } else {
+      setShowAIMenu(false);
+    }
+  };
 
   // Local state to force re-render when the editor state changes
   const [, setTick] = useState(0);
@@ -58,25 +93,36 @@ export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readO
     return 'paragraph';
   };
 
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Convert to base64 and insert
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target.result;
+      // Check if editor has setImage command
+      if (editor.commands.setImage) {
+        editor.chain().focus().setImage({ src: base64 }).run();
+      } else {
+        console.error('Image extension not available');
+        alert('Image upload is not supported. Please install @tiptap/extension-image');
+      }
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  };
+
   return (
     <div className="flex items-center gap-1 px-4 py-2 border-b bg-white overflow-x-auto">
-      {/* Invite Button - Only for owners and editors */}
-      {(userRole === 'owner' || userRole === 'editor') && onInvite && (
-        <>
-          <ToolbarButton
-            onClick={onInvite}
-            title="Invite User to Room"
-            className="bg-blue-50 hover:bg-blue-100 text-blue-600"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-            <span className="ml-1 text-sm font-medium">Invite</span>
-          </ToolbarButton>
-          <ToolbarSeparator />
-        </>
-      )}
-      
       {/* Undo/Redo */}
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().undo().run())}
@@ -189,6 +235,27 @@ export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readO
 
       <ToolbarSeparator />
 
+      {/* Insert Image */}
+      <>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          style={{ display: 'none' }}
+        />
+        <ToolbarButton
+          onClick={() => fileInputRef.current?.click()}
+          title="Insert Image"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </ToolbarButton>
+      </>
+
+      <ToolbarSeparator />
+
       {/* Lists */}
       <ToolbarButton
         onClick={() => exec(() => editor.chain().focus().toggleBulletList().run())}
@@ -210,6 +277,41 @@ export function FormattingToolbar({ editor, userRole = 'viewer', onInvite, readO
       </ToolbarButton>
 
       <ToolbarSeparator />
+
+      {/* AI Enhancement */}
+      {!readOnly && token && (
+        <>
+          <div className="relative">
+            <ToolbarButton
+              onClick={handleAIMenuToggle}
+              isActive={isAIMenuOpen}
+              title="AI Text Enhancement"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </ToolbarButton>
+            
+            {isAIMenuOpen && (
+              <>
+                {console.log('✅ Rendering AI menu - isAIMenuOpen is true')}
+                <div 
+                  className="fixed inset-0" 
+                  style={{ zIndex: 9998, background: 'rgba(0,0,0,0.1)' }}
+                  onClick={handleAIMenuClose}
+                />
+                <AIEnhanceMenu
+                  editor={editor}
+                  token={token}
+                  onClose={handleAIMenuClose}
+                />
+              </>
+            )}
+          </div>
+
+          <ToolbarSeparator />
+        </>
+      )}
 
       {/* Clear Formatting */}
       <ToolbarButton

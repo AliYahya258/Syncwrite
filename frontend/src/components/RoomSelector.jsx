@@ -144,6 +144,34 @@ export function RoomSelector({ username, onJoinRoom, onSignOut, serverPort }) {
     onJoinRoom(roomId);
   };
 
+  const handleDeleteRoom = async (roomId, roomName, e) => {
+    e.stopPropagation(); // Prevent triggering the room join
+    
+    if (!confirm(`Are you sure you want to delete "${roomName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://127.0.0.1:${serverPort}/api/rooms/${encodeURIComponent(roomId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        // Refresh room list
+        fetchUserRooms();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Failed to delete room');
+      }
+    } catch (error) {
+      alert('Failed to delete room');
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
       <div className="w-full max-w-2xl">
@@ -293,12 +321,14 @@ export function RoomSelector({ username, onJoinRoom, onSignOut, serverPort }) {
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {rooms.map((room) => (
-                  <button
+                  <div
                     key={room.room_id}
-                    onClick={() => handleJoin(room.room_id)}
                     className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors group"
                   >
-                    <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleJoin(room.room_id)}
+                      className="flex-1 flex items-center gap-3 text-left"
+                    >
                       <div className="p-2 bg-white rounded-lg border border-gray-200">
                         <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -316,11 +346,24 @@ export function RoomSelector({ username, onJoinRoom, onSignOut, serverPort }) {
                           </span>
                         </div>
                       </div>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {room.role === 'owner' && (
+                        <button
+                          onClick={(e) => handleDeleteRoom(room.room_id, room.room_name, e)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete room"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                      <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
-                    <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

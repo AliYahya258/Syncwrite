@@ -11,12 +11,114 @@ export function EditorView({ username, roomName, content, setContent, users, onL
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showViewMenu, setShowViewMenu] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('editor');
   const [roomUsers, setRoomUsers] = useState([]);
+  const [showFileMenu, setShowFileMenu] = useState(false);
   
   const handleInviteClick = () => {
     setShowInviteModal(true);
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.docx')) {
+      alert('Please upload a .docx file');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('room_id', roomName);
+
+      const response = await fetch(`http://127.0.0.1:${serverPort}/api/upload-docx`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setContent(data.html_content);
+        setShowFileMenu(false);
+      } else {
+        alert('Failed to upload file');
+      }
+    } catch (error) {
+      alert('Error uploading file: ' + error.message);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:${serverPort}/api/download-pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          room_id: roomName,
+          content: content
+        })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${roomName.split('/').pop()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setShowFileMenu(false);
+      } else {
+        alert('Failed to download PDF');
+      }
+    } catch (error) {
+      alert('Error downloading PDF: ' + error.message);
+    }
+  };
+
+  const handleDownloadDOCX = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:${serverPort}/api/download-docx`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          room_id: roomName,
+          content: content
+        })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${roomName.split('/').pop()}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setShowFileMenu(false);
+      } else {
+        alert('Failed to download DOCX');
+      }
+    } catch (error) {
+      alert('Error downloading DOCX: ' + error.message);
+    }
   };
 
   // Fetch room users with roles
@@ -308,6 +410,29 @@ export function EditorView({ username, roomName, content, setContent, users, onL
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </button>
+          
+          {/* AI Enhancement Button */}
+          {!isReadOnly && (
+            <button 
+              onClick={() => {
+                console.log('🎯 AI Assistant button clicked in EditorView');
+                console.log('  - Current showAIAssistant:', showAIAssistant);
+                const newState = !showAIAssistant;
+                console.log('  - Setting showAIAssistant to:', newState);
+                setShowAIAssistant(newState);
+              }}
+              className={`h-9 px-4 rounded-md bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 flex items-center gap-2 text-sm font-medium text-white transition-colors shadow-sm ${
+                showAIAssistant ? 'ring-2 ring-purple-400' : ''
+              }`}
+              title="AI Writing Assistant - Select text first"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              AI Assistant
+            </button>
+          )}
+          
           {(userRole === 'owner' || userRole === 'editor') && (
             <button 
               onClick={() => setShowInviteModal(true)}
@@ -328,11 +453,56 @@ export function EditorView({ username, roomName, content, setContent, users, onL
 
       {/* Menu Bar */}
       <div className="flex h-12 items-center gap-1 border-b px-4 bg-gray-50/50">
-        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
-          File
-        </div>
-        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
-          Edit
+        {/* File Menu with Dropdown */}
+        <div className="relative">
+          <div 
+            onClick={() => setShowFileMenu(!showFileMenu)}
+            className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors"
+          >
+            File
+          </div>
+          
+          {showFileMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setShowFileMenu(false)}
+              />
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px] z-20">
+                <label className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center gap-2 cursor-pointer">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Upload DOCX
+                  <input
+                    type="file"
+                    accept=".docx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+                <div className="border-t border-gray-200 my-1" />
+                <button
+                  onClick={handleDownloadPDF}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download as PDF
+                </button>
+                <button
+                  onClick={handleDownloadDOCX}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download as DOCX
+                </button>
+              </div>
+            </>
+          )}
         </div>
         
         {/* View Menu with Dropdown */}
@@ -379,16 +549,6 @@ export function EditorView({ username, roomName, content, setContent, users, onL
             </>
           )}
         </div>
-        
-        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
-          Insert
-        </div>
-        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
-          Format
-        </div>
-        <div className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer text-sm font-medium text-gray-700 transition-colors">
-          Tools
-        </div>
       </div>
 
       {/* Content Area with Rich Text Editor */}
@@ -410,6 +570,9 @@ export function EditorView({ username, roomName, content, setContent, users, onL
           readOnly={isReadOnly}
           userRole={userRole}
           onInvite={handleInviteClick}
+          token={token}
+          showAIMenu={showAIAssistant}
+          onCloseAIMenu={() => setShowAIAssistant(false)}
         />
       </main>
 
