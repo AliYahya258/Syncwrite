@@ -87,7 +87,7 @@ A modern, feature-rich collaborative document editor built with React, FastAPI, 
 ```bash
 - Python 3.9+
 - Node.js 16+
-- PostgreSQL
+- SQLite
 - Redis
 ```
 
