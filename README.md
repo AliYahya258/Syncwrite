@@ -282,7 +282,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 For questions, issues, or suggestions, please open an issue on GitHub or contact the maintainers.
 
----
-
-**Built with ❤️ using React, FastAPI, and AI**
 
